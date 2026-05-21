@@ -50,11 +50,11 @@ last_updated: "2026-05-20"
   * Aprobación: Mutación de estado, devuelve `HTTP 200 OK`.
   * Rechazo: Aborta transacción, devuelve `HTTP 400 Bad Request` con esquema de error semántico (gatilla **Bucle de Autocorrección** en Python).
 
-### Fase 4: State Persistence (AWS DynamoDB)
-* **Implementación**: Base de datos NoSQL *Serverless* (AWS DynamoDB).
-* **Esquema Single-Table**: Tabla `AegisDrivers`. Partition Key: `DriverID` (String).
-* **Control de Latencia**: Go debe ejecutar consultas con un *Timeout* estricto. Si DynamoDB no responde, se aborta la transacción para no colgar el *Gateway*.
-* **Escalabilidad**: Al delegar el estado a AWS, las instancias de Go pueden escalar horizontalmente (stateless) sin preocuparse por condiciones de carrera locales.
+### Fase 4: State Persistence (Dual Mode)
+* **Arquitectura de Contingencia**: El sistema opera bajo dos modos controlados por la variable de entorno `DEMO_MODE`.
+* **Modo Demo (`true`)**: Mapa en memoria protegido por `sync.RWMutex`. Sin dependencia de red. Datos precargados al iniciar.
+* **Modo Producción (`false`)**: AWS DynamoDB. Tabla `AegisDrivers`, Single-Table Design, Partition Key: `DriverID`.
+* **Control de Latencia**: Las consultas remotas usan `context.WithTimeout` de 200ms para evitar bloqueos del Gateway.
 
 ## Strict AI IDE Mandates
 * **Regla 1**: El código Go **no procesa lenguaje natural**. Usa `net/http` estándar.

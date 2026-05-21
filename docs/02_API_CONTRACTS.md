@@ -7,7 +7,6 @@ last_updated: "2026-05-20"
 ---
 
 # 02_API_CONTRACTS: DATA STRUCTURES & ENDPOINTS
-# 02_API_CONTRACTS: DATA STRUCTURES & ENDPOINTS
 
 ## 1. External Interface (Client -> Go Aegis)
 
@@ -22,7 +21,7 @@ last_updated: "2026-05-20"
 {
   "prompt": "Se cayó el turno, manda a Juan a la Mina Sur. El viaje dura 3 horas."
 }
-````
+```
 
 ### 1.2. Outbound Response
 
@@ -70,7 +69,8 @@ last_updated: "2026-05-20"
 {
   "intent": "dispatch_driver",
   "driver_id": "DRV-Juan",
-  "estimated_hours": 3
+  "estimated_hours": 3,
+  "destination": "Mina Sur"
 }
 ```
 
@@ -103,6 +103,7 @@ type ExecutionIntent struct {
     Intent         string `json:"intent"`
     DriverID       string `json:"driver_id"`
     EstimatedHours int    `json:"estimated_hours"`
+    Destination    string `json:"destination"`
 }
 
 // Estructura de Rechazo Semántico (Enviada a Python)
@@ -134,6 +135,7 @@ class DispatchIntent(BaseModel):
     intent: str = Field(description="Must be 'dispatch_driver'")
     driver_id: str = Field(description="Exact ID of the selected driver")
     estimated_hours: int = Field(description="Estimated duration of the trip in hours")
+    destination: str = Field(description="Exact destination of the dispatch")
 
 # Esquema para parsear el error de Go
 class AegisRejection(BaseModel):
