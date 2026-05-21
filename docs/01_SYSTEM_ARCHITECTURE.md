@@ -37,7 +37,7 @@ last_updated: "2026-05-20"
   * Inyección del texto en un **System Prompt** estricto.
   * Llamada a API de LLM comercial.
   * Forzado de formato de salida vía **Structured Outputs** (`JSON`).
-* **Salida**: Objeto `JSON` estricto representando la intención de negocio. Reenviado a Go vía ruta interna `/api/internal/validate`.
+* **Salida**: Objeto `JSON` estricto representando la intención de negocio. Reenviado a Go vía ruta interna `/internal/v1/execute`.
 
 ### Fase 3: Outbound Post-Flight (Go Aegis)
 * **Objetivo**: **Compliance determinista** y protección de estado.
@@ -50,10 +50,11 @@ last_updated: "2026-05-20"
   * Aprobación: Mutación de estado, devuelve `HTTP 200 OK`.
   * Rechazo: Aborta transacción, devuelve `HTTP 400 Bad Request` con esquema de error semántico (gatilla **Bucle de Autocorrección** en Python).
 
-### Fase 4: State Persistence
-* **Implementación Demo**: Mapa en memoria en Go (`map[string]EntityState`).
-* **Control de Concurrencia**: Uso obligatorio de `sync.RWMutex` para prevenir **Race Conditions** durante lecturas/escrituras.
-* **Migración Producción**: Diseño preparado para inyección de dependencias hacia **AWS DynamoDB** (arquitectura *Serverless*).
+### Fase 4: State Persistence (AWS DynamoDB)
+* **Implementación**: Base de datos NoSQL *Serverless* (AWS DynamoDB).
+* **Esquema Single-Table**: Tabla `AegisDrivers`. Partition Key: `DriverID` (String).
+* **Control de Latencia**: Go debe ejecutar consultas con un *Timeout* estricto. Si DynamoDB no responde, se aborta la transacción para no colgar el *Gateway*.
+* **Escalabilidad**: Al delegar el estado a AWS, las instancias de Go pueden escalar horizontalmente (stateless) sin preocuparse por condiciones de carrera locales.
 
 ## Strict AI IDE Mandates
 * **Regla 1**: El código Go **no procesa lenguaje natural**. Usa `net/http` estándar.

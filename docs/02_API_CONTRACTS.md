@@ -83,9 +83,9 @@ last_updated: "2026-05-20"
 ```json
 {
   "status": "blocked",
-  "reason": "POLICY_VIOLATION",
-  "message": "Driver DRV-Juan reaching 6 hours. Legal limit is 5.",
-  "action_required": "Select another driver with hours_driven_today <= 2."
+  "reason": "POLICY_VIOLATION_MATRIX",
+  "message": "Driver DRV-Pedro rejected. Reason: Requires License A5, holds License B.",
+  "action_required": "Select another driver with hours_driven_today <= 2 AND License == A5."
 }
 ```
 
@@ -113,11 +113,12 @@ type SemanticRejection struct {
     ActionRequired string `json:"action_required"`
 }
 
-// Estructura de Estado en Memoria (Base de Datos Mock)
+// Estructura de Estado del Conductor (In-Memory / DynamoDB Item)
 type DriverState struct {
-    DriverID         string
-    CurrentStatus    string
-    HoursDrivenToday int
+    DriverID         string `json:"DriverID"`
+    CurrentStatus    string `json:"CurrentStatus"`    // "Available", "OnRoute", "OffDuty"
+    HoursDrivenToday int    `json:"HoursDrivenToday"`
+    License          string `json:"License"`
 }
 ```
 
@@ -140,7 +141,7 @@ class AegisRejection(BaseModel):
     reason: str
     message: str
     action_required: str
-}
+
 ```
 
 ```

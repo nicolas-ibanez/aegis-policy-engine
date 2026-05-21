@@ -14,19 +14,20 @@ last_updated: "2026-05-20"
 * **Separation of Concerns**: La lógica de enrutamiento HTTP debe estar **estrictamente aislada** de la lógica de validación matemática.
 * **Deterministic Execution**: Go actúa como la Unidad Lógico-Aritmética (**ALU**). Ninguna decisión probabilística debe programarse en esta capa.
 
-## 2. State Management & Concurrency (Demo Configuration)
+## 2. State Persistence (Dual Mode)
 
-### 2.1. In-Memory Datastore
-* **Estructura Base**: Instanciar un mapa global `map[string]DriverState` para simular la tabla de DynamoDB.
-* **Estado Inicial Requerido**: Precargar un chofer con datos al límite para forzar el fallo del LLM en el demo.
-  * Ej: `DRV-Juan` con `HoursDrivenToday: 3`.
-
-### 2.2. Concurrency Safety (Mutex)
-* **Requisito Estricto**: Todo acceso al mapa en memoria debe estar protegido por **`sync.RWMutex`** para evitar condiciones de carrera (Race Conditions).
-* **Operaciones de Lectura**: Utilizar **`RLock()`** y **`RUnlock()`** al consultar el estado actual del chofer.
-* **Operaciones de Escritura**: Utilizar **`Lock()`** y **`Unlock()`** al persistir una transacción válida (después de la validación matemática).
-* **Bloqueo de Transacción**: Usar **`defer`** inmediatamente después de adquirir el bloqueo para garantizar la liberación del recurso.
-
+### 2.1. Mode Selection (Environment Variable)
+* **Variable de Control**: `DEMO_MODE` (leída al iniciar el servidor con `os.Getenv`).
+* **`DEMO_MODE=true`** (In-Memory Store):
+  * Utilizar un mapa en memoria `map[string]DriverState` protegido por un `sync.RWMutex`.
+  * Al iniciar el servidor, precargar los 3 drivers del demo script:
+    * `DRV-Juan`: `HoursDrivenToday: 3`, `License: "A5"`, `CurrentStatus: "Available"`.
+    * `DRV-Pedro`: `HoursDrivenToday: 4`, `License: "B"`, `CurrentStatus: "Available"`.
+    * `DRV-Diego`: `HoursDrivenToday: 1`, `License: "A5"`, `CurrentStatus: "Available"`.
+* **`DEMO_MODE=false`** (AWS DynamoDB):
+  * **Librería Obligatoria**: Utilizar `github.com/aws/aws-sdk-go-v2`. Prohibido usar la v1.
+  * **Tabla**: Conectar a la tabla `AegisDrivers` en la región `us-east-1`.
+  * **Timeouts Estrictos**: Toda llamada a DynamoDB (`GetItem`, `UpdateItem`) debe estar envuelta en un `context.WithTimeout` de máximo **200 milisegundos**. Si la base de datos se degrada, el Gateway debe fallar rápido.
 ## 3. Pre-Flight Shield Implementation (Inbound)
 
 ### 3.1. Payload Sanitization
@@ -43,20 +44,20 @@ last_updated: "2026-05-20"
 
 ## 4. Post-Flight Shield Implementation (Outbound)
 
-### 4.1. Deterministic Validation Logic
+### 4.1. Deterministic Matrix Validation Logic
 * **Extracción**: Decodificar el `JSON` proveniente de Python (`ExecutionIntent`).
-* **Consulta de Estado**: Buscar `driver_id` en el mapa protegido por Mutex.
-* **Evaluación Matemática**: 
-  * Sumar `HoursDrivenToday` (histórico) + `EstimatedHours` (solicitado).
-  * **Regla de Negocio (Ley 18.290)**: Si la suma **> 5**, la validación falla.
+* **Consulta de Estado**: Obtener el estado del `driver_id` desde el store activo (in-memory o DynamoDB según `DEMO_MODE`).
+* **Evaluación Matricial (Reglas Duras)**: 
+  1. **Regla 1 — Cuantitativa (Ley 18.290)**: `HoursDrivenToday` + `EstimatedHours` **<= 5**.
+  2. **Regla 2 — Cualitativa (Certificación)**: `License` **== "A5"** (requerida para despachos a "Mina Sur").
+  3. **Regla 3 — Estado Operacional**: `CurrentStatus` **== "Available"**. Si el chofer está `"OnRoute"` u `"OffDuty"`, Go bloquea la transacción.
+* Las reglas se evalúan en orden. Si **cualquiera** falla, la validación se rechaza inmediatamente. El `SemanticRejection` debe especificar **exactamente cuál de las tres reglas falló** (Cuantitativa, Cualitativa o Estado Operacional).
 
 ### 4.2. Routing & HTTP Status Mapping
 * **Ruta de Éxito**:
-  * Adquirir `Lock()`.
-  * Actualizar `HoursDrivenToday` en el mapa.
-  * Liberar `Unlock()`.
+  * Persistir la mutación: sumar las `EstimatedHours` al registro del driver en el store activo.
   * Retornar **`HTTP 200 OK`**.
 * **Ruta de Rechazo (Compliance Failure)**:
-  * Cancelar transacción (no mutar el mapa).
-  * Construir el objeto **`SemanticRejection`** especificando el límite superado.
+  * Abortar transacción (No ejecutar mutación en el store).
+  * Construir el objeto **`SemanticRejection`** especificando qué regla de la matriz falló (Cuantitativa, Cualitativa o Estado Operacional).
   * Retornar **`HTTP 400 Bad Request`** con el JSON codificado para gatillar el **Retry Loop** en Python.

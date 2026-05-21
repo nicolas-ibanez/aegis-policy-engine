@@ -22,9 +22,11 @@ last_updated: "2026-05-20"
 * **Integración de SDK**: Usar el paquete oficial `anthropic` para Python, implementando la funcionalidad nativa de **Tool Use** (`tool_choice`) para forzar la estructura.
 
 ### 2.2. System Prompt Mandates
-* **Reglas de Negocio Estáticas**: El *prompt* **debe** contener las normativas operativas base (Ej: límite legal de 5 horas continuas).
-* **Ceguera de Estado (Blindness)**: El *prompt* **no debe** contener el historial transaccional en tiempo real (Ej: horas conducidas actualmente por cada chofer).
-* **Catálogo Base**: Proveer únicamente la lista de entidades disponibles (IDs de choferes válidos) sin su métrica de estado.
+* **Reglas de Negocio Estáticas**: El *prompt* **debe** contener las normativas operativas base:
+  1. Límite legal continuo: 5 horas máximo.
+  2. Requisito de ruta: Los despachos a "Mina Sur" exigen estrictamente **Licencia A5**.
+* **Ceguera de Estado (Blindness)**: El *prompt* **no debe** contener el historial transaccional en tiempo real ni el tipo de licencia de cada chofer.
+* **Catálogo Base**: Proveer únicamente la lista de IDs válidos.
 
 ### 2.3. Structured Outputs Enforcement
 * **Desactivación de Texto Libre**: El agente tiene **prohibido** emitir respuestas en texto plano al usuario. Toda salida debe ser obligada a pasar por la herramienta de ejecución.

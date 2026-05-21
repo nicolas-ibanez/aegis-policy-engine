@@ -8,18 +8,11 @@ last_updated: "2026-05-20"
 
 # 05_DEMO_SCRIPT: LIVE EXECUTION PROTOCOL
 
-## 1. Initial Data State (Capa Go de Persistencia en Memoria)
+## 1. Initial Data State (In-Memory Store — DEMO_MODE=true)
 
-* **Precarga de Entidades**: Inicializar el `map[string]DriverState` global en Go con tres perfiles críticos para inducir fallos matemáticos escalonados.
-* **Perfil 1 (`DRV-Juan`)**: 
-  * `HoursDrivenToday`: `3`
-  * `CurrentStatus`: `"Available"`
-* **Perfil 2 (`DRV-Pedro`)**: 
-  * `HoursDrivenToday`: `4`
-  * `CurrentStatus`: `"Available"`
-* **Perfil 3 (`DRV-Diego`)**: 
-  * `HoursDrivenToday`: `1`
-  * `CurrentStatus`: `"Available"`
+* **Perfil 1 (`DRV-Juan`)**: `HoursDrivenToday`: 3 | `License`: "A5" | `CurrentStatus`: "Available"
+* **Perfil 2 (`DRV-Pedro`)**: `HoursDrivenToday`: 4 | `License`: "B" | `CurrentStatus`: "Available"
+* **Perfil 3 (`DRV-Diego`)**: `HoursDrivenToday`: 1 | `License`: "A5" | `CurrentStatus`: "Available"
 
 ## 2. Escenario 1: Ataque Inbound (Pre-Flight Shield)
 
@@ -69,10 +62,9 @@ last_updated: "2026-05-20"
 
 
 * **Paso 3: Bloqueo Determinista 1 (Go)**:
-* Go recibe la intención, adquiere `RLock()` y extrae el histórico de `DRV-Juan` (3 horas).
-* Ejecuta la suma: `3 (Histórico) + 3 (Estimado) = 6 horas`.
-* **Violación de Restricción**: `6 > 5` (Excede Ley 18.290). Rechaza con `HTTP 400 Bad Request`.
-
+  * Go recibe la intención y obtiene el estado de `DRV-Juan` del store (3 horas, Licencia A5, Status Available).
+  * Ejecuta la suma: `3 (Histórico) + 3 (Estimado) = 6 horas`.
+  * **Violación de Regla 1 (Cuantitativa)**: `6 > 5` (Excede Ley 18.290). Rechaza con `HTTP 400 Bad Request`.
 
 * **Paso 4: Captura y Retry 1 (Python)**:
 * FastAPI intercepta el `HTTP 400`. El bloque `try/except` des-serializa la respuesta de Aegis.
@@ -81,23 +73,22 @@ last_updated: "2026-05-20"
 * Genera el JSON estructurado: `{"intent": "dispatch_driver", "driver_id": "DRV-Pedro", "estimated_hours": 3}`.
 
 
-* **Paso 5: Bloqueo Determinista 2 (Go)**:
-* Go recibe la segunda intención. Consulta histórico de Pedro (4 horas).
-* Ejecuta la suma: `4 (Histórico) + 3 (Estimado) = 7 horas`.
-* **Violación de Restricción**: `7 > 5`. Rechaza nuevamente con `HTTP 400 Bad Request`.
-
+* **Paso 5: Bloqueo Determinista 2 (Go - Falla Regla 2: Licencia)**:
+  * Go recibe la segunda intención (Pedro). Obtiene su estado del store.
+  * **Violación de Regla 2 (Cualitativa)**: Pedro tiene Licencia "B", se requiere "A5" para despachos a Mina Sur.
+  * Rechaza con `HTTP 400 Bad Request`, especificando fallo de certificación. Nota: la Regla 3 (Estado Operacional) también sería evaluada si la Regla 2 pasara.
 
 * **Paso 6: Captura y Retry 2 (Python)**:
-* Python intercepta el segundo `HTTP 400`. Inyecta al historial: `"Error: DRV-Pedro alcanza 7 horas. Límite es 5. Seleccione otro conductor."`
-* Claude descarta a Pedro. Selecciona la última entidad disponible en su contexto: **Diego**.
-* Genera el JSON estructurado: `{"intent": "dispatch_driver", "driver_id": "DRV-Diego", "estimated_hours": 3}`.
+  * Python intercepta el segundo `HTTP 400`. Inyecta al historial: `"Error: DRV-Pedro rechazado. Requiere Licencia A5, tiene Licencia B. Seleccione otro conductor."`
+  * Claude descarta a Pedro. Selecciona la última entidad disponible en su contexto: **Diego**.
+  * Genera el JSON estructurado: `{"intent": "dispatch_driver", "driver_id": "DRV-Diego", "estimated_hours": 3}`.
 
 
 * **Paso 7: Aprobación y Mutación Atómica (Go)**:
-* Go recibe la tercera intención. Consulta histórico de Diego (1 hora).
-* Ejecuta la suma: `1 (Histórico) + 3 (Estimado) = 4 horas`.
-* **Validación Exitosa**: `4 <= 5`.
-* Adquiere `Lock()`, actualiza el mapa (`HoursDrivenToday: 4`) y libera `Unlock()`. Retorna `HTTP 200 OK`.
+  * Go recibe la tercera intención. Obtiene el estado de Diego del store (1 hora, Licencia A5, Status Available).
+  * Ejecuta la validación matricial: `1 + 3 = 4 horas` (Cumple), Licencia == "A5" (Cumple), CurrentStatus == "Available" (Cumple). Las 3 reglas pasan.
+  * **Validación Exitosa**. 
+  * Persiste la mutación en el store (`HoursDrivenToday: 4`). Retorna `HTTP 200 OK`.
 
 
 
@@ -111,9 +102,9 @@ last_updated: "2026-05-20"
   "assigned_driver": "DRV-Diego",
   "destination": "Mina Sur",
   "execution_log": [
-    "DRV-Juan blocked post-flight: Exceeded 5-hour continuous limit (projected 6h).",
-    "DRV-Pedro blocked post-flight: Exceeded 5-hour continuous limit (projected 7h).",
-    "DRV-Diego approved: Legal compliance secured (projected 4h)."
+    "DRV-Juan blocked: Quantitative Rule (Projected 6h > 5h limit).",
+    "DRV-Pedro blocked: Qualitative Rule (License B, requires A5 for Mina Sur).",
+    "DRV-Diego approved: All 3 rules passed (4h, License A5, Status Available)."
   ]
 }
 
