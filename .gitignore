@@ -1,0 +1,39 @@
+# Go binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Go test binaries / coverage
+*.test
+*.out
+*.prof
+
+# Go build cache
+/aegis/vendor/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+/agent/venv/
+/agent/.venv/
+/agent/env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Environment variables (may contain AWS keys)
+.env
+.env.local
