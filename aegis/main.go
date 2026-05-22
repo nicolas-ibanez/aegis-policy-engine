@@ -1,11 +1,15 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"regexp"
 	"sync"
@@ -35,6 +39,11 @@ type SemanticRejection struct {
 
 type DispatchRequest struct {
 	Prompt string `json:"prompt"`
+}
+
+type AgentRequest struct {
+	SessionID   string `json:"session_id"`
+	CleanPrompt string `json:"clean_prompt"`
 }
 
 type DriverState struct {
@@ -129,8 +138,62 @@ func (s *server) handleDispatch(w http.ResponseWriter, r *http.Request) {
 	log.Printf("[AEGIS - PRE-FLIGHT] PASSED prompt_len=%d latency=%s",
 		len(req.Prompt), time.Since(start))
 
-	// Placeholder: proxy to Python agent (Phase 2) not yet implemented.
-	w.WriteHeader(http.StatusOK)
+	s.proxyToAgent(w, r.Context(), req.Prompt)
+}
+
+func (s *server) proxyToAgent(w http.ResponseWriter, ctx context.Context, cleanPrompt string) {
+	sessionID := fmt.Sprintf("req-%d", time.Now().UnixNano())
+
+	payload, _ := json.Marshal(AgentRequest{
+		SessionID:   sessionID,
+		CleanPrompt: cleanPrompt,
+	})
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+		"http://localhost:5000/internal/v1/agent/process",
+		bytes.NewReader(payload),
+	)
+	if err != nil {
+		log.Printf("[AEGIS - PROXY] session=%s ERROR building request: %v", sessionID, err)
+		writeJSON(w, http.StatusInternalServerError, SemanticRejection{
+			Status:  "error",
+			Reason:  "INTERNAL_ERROR",
+			Message: "Failed to build upstream request.",
+		})
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	log.Printf("[AEGIS - PROXY] session=%s → forwarding to agent", sessionID)
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		// Distinguish connection-refused from timeout per spec §3.2.
+		// Both cases protect the external client from seeing internal topology.
+		var urlErr *url.Error
+		if errors.As(err, &urlErr) && urlErr.Timeout() {
+			log.Printf("[AEGIS - PROXY] session=%s TIMEOUT", sessionID)
+			writeJSON(w, http.StatusGatewayTimeout, SemanticRejection{
+				Status:  "error",
+				Reason:  "GATEWAY_TIMEOUT",
+				Message: "Agent did not respond within the allowed window.",
+			})
+		} else {
+			log.Printf("[AEGIS - PROXY] session=%s UNAVAILABLE: %v", sessionID, err)
+			writeJSON(w, http.StatusServiceUnavailable, SemanticRejection{
+				Status:  "error",
+				Reason:  "AGENT_UNAVAILABLE",
+				Message: "Python agent is unreachable. Retry later.",
+			})
+		}
+		return
+	}
+	defer resp.Body.Close()
+
+	w.Header().Set("Content-Type", resp.Header.Get("Content-Type"))
+	w.WriteHeader(resp.StatusCode)
+	io.Copy(w, resp.Body)
+	log.Printf("[AEGIS - PROXY] session=%s ← agent responded status=%d", sessionID, resp.StatusCode)
 }
 
 func writeJSON(w http.ResponseWriter, status int, body any) {
