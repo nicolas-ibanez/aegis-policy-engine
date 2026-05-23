@@ -37,3 +37,4 @@ desktop.ini
 # Environment variables (may contain AWS keys)
 .env
 .env.local
+.private_dev/
