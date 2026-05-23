@@ -101,6 +101,9 @@ func main() {
 	}
 }
 
+// handleDispatch serves as the Pre-Flight Shield.
+// Validates payload semantics, enforces length constraints (O(1)), and
+// prevents prompt injection attacks via regex matching before delegating to the proxy.
 func (s *server) handleDispatch(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 
@@ -145,6 +148,9 @@ func (s *server) handleDispatch(w http.ResponseWriter, r *http.Request) {
 	s.proxyToAgent(w, r.Context(), req.Prompt)
 }
 
+// proxyToAgent bridges the Go deterministic layer with the Python probabilistic agent.
+// Implements 15s circuit-breaking and translates upstream network degradation 
+// into structured HTTP semantic responses (503/504).
 func (s *server) proxyToAgent(w http.ResponseWriter, ctx context.Context, cleanPrompt string) {
 	sessionID := fmt.Sprintf("req-%d", time.Now().UnixNano())
 
@@ -200,6 +206,9 @@ func (s *server) proxyToAgent(w http.ResponseWriter, ctx context.Context, cleanP
 	log.Printf("[AEGIS - PROXY] session=%s ← agent responded status=%d", sessionID, resp.StatusCode)
 }
 
+// handleExecute serves as the Post-Flight Shield.
+// Acts as the authoritative deterministic evaluator of LLM-generated intents.
+// Matrix validation order enforced: Quantitative -> Qualitative -> Operational.
 func (s *server) handleExecute(w http.ResponseWriter, r *http.Request) {
 	var intent ExecutionIntent
 	if err := json.NewDecoder(r.Body).Decode(&intent); err != nil {
@@ -239,7 +248,7 @@ func (s *server) handleExecute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Regla 1 — Cuantitativa (Ley 18.290): acumulado diario no puede superar 5 horas.
+	// Rule 1 (Quantitative): Daily limit strictly enforced at 5 hours (Ley 18.290).
 	if driver.HoursDrivenToday+intent.EstimatedHours > 5 {
 		log.Printf("[AEGIS - POST-FLIGHT] BLOCKED driver=%s rule=QUANTITATIVE total=%d",
 			intent.DriverID, driver.HoursDrivenToday+intent.EstimatedHours)
@@ -252,7 +261,7 @@ func (s *server) handleExecute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Regla 2 — Cualitativa (Certificación): licencia A5 requerida para todos los despachos.
+	// Rule 2 (Qualitative): A5 license is a strict domain requirement for heavy machinery dispatch.
 	if driver.License != "A5" {
 		log.Printf("[AEGIS - POST-FLIGHT] BLOCKED driver=%s rule=QUALITATIVE license=%s",
 			intent.DriverID, driver.License)
@@ -265,7 +274,7 @@ func (s *server) handleExecute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Regla 3 — Estado Operacional: solo conductores Available pueden recibir despachos.
+	// Rule 3 (Operational State): Dispatch strictly prohibited for non-available drivers.
 	if driver.CurrentStatus != "Available" {
 		log.Printf("[AEGIS - POST-FLIGHT] BLOCKED driver=%s rule=OPERATIONAL status=%s",
 			intent.DriverID, driver.CurrentStatus)

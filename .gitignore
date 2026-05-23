@@ -21,6 +21,7 @@ __pycache__/
 /agent/venv/
 /agent/.venv/
 /agent/env/
+agent/agent_local.py
 
 # IDE
 .vscode/
