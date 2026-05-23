@@ -149,7 +149,7 @@ func (s *server) handleDispatch(w http.ResponseWriter, r *http.Request) {
 }
 
 // proxyToAgent bridges the Go deterministic layer with the Python probabilistic agent.
-// Implements 15s circuit-breaking and translates upstream network degradation 
+// Implements 15s circuit-breaking and translates upstream network degradation
 // into structured HTTP semantic responses (503/504).
 func (s *server) proxyToAgent(w http.ResponseWriter, ctx context.Context, cleanPrompt string) {
 	sessionID := fmt.Sprintf("req-%d", time.Now().UnixNano())
@@ -379,7 +379,7 @@ func newInMemoryStore() *inMemoryStore {
 		DriverID: "DRV-Juan", HoursDrivenToday: 3, License: "A5", CurrentStatus: "Available",
 	}
 	store.drivers["DRV-Pedro"] = DriverState{
-		DriverID: "DRV-Pedro", HoursDrivenToday: 4, License: "B", CurrentStatus: "Available",
+		DriverID: "DRV-Pedro", HoursDrivenToday: 2, License: "B", CurrentStatus: "Available",
 	}
 	store.drivers["DRV-Diego"] = DriverState{
 		DriverID: "DRV-Diego", HoursDrivenToday: 1, License: "A5", CurrentStatus: "Available",
